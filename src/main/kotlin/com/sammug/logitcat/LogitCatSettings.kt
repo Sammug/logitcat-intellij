@@ -16,6 +16,9 @@ class LogitCatSettings : PersistentStateComponent<LogitCatSettings> {
     var dashboardPort: Int = 9090
     var autoStart: Boolean = true
     var maxAlerts: Int = 200
+    var autoStartOnRun: Boolean = true
+    var androidConfigPath: String = ""
+    var adbPath: String = ""
 
     override fun getState(): LogitCatSettings = this
 

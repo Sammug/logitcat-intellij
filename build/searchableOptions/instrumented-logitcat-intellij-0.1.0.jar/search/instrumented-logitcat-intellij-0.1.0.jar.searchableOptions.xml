@@ -24,10 +24,20 @@
     <option name="stop" path="ActionManager" hit="Stop LogitCat daemon" />
   </configurable>
   <configurable id="com.sammug.logitcat.settings" configurable_name="LogitCat">
-    <option name="auto-start" hit="Auto-start LogitCat with project" />
-    <option name="logitcat" hit="Auto-start LogitCat with project" />
-    <option name="project" hit="Auto-start LogitCat with project" />
-    <option name="with" hit="Auto-start LogitCat with project" />
+    <option name="android" hit="Android config:" />
+    <option name="config" hit="Android config:" />
+    <option name="android" hit="Auto-capture logcat when running Android app" />
+    <option name="app" hit="Auto-capture logcat when running Android app" />
+    <option name="auto-capture" hit="Auto-capture logcat when running Android app" />
+    <option name="logcat" hit="Auto-capture logcat when running Android app" />
+    <option name="running" hit="Auto-capture logcat when running Android app" />
+    <option name="when" hit="Auto-capture logcat when running Android app" />
+    <option name="auto-connect" hit="Auto-connect to daemon when project opens" />
+    <option name="daemon" hit="Auto-connect to daemon when project opens" />
+    <option name="opens" hit="Auto-connect to daemon when project opens" />
+    <option name="project" hit="Auto-connect to daemon when project opens" />
+    <option name="to" hit="Auto-connect to daemon when project opens" />
+    <option name="when" hit="Auto-connect to daemon when project opens" />
     <option name="config" hit="Config path:" />
     <option name="path" hit="Config path:" />
     <option name="dashboard" hit="Dashboard port:" />
@@ -45,6 +55,25 @@
     <option name="number" hit="Maximum number of alerts to keep (default: 200)" />
     <option name="of" hit="Maximum number of alerts to keep (default: 200)" />
     <option name="to" hit="Maximum number of alerts to keep (default: 200)" />
+    <option name="adb" hit="Path to adb binary (auto-detected from ANDROID_HOME if blank)" />
+    <option name="android" hit="Path to adb binary (auto-detected from ANDROID_HOME if blank)" />
+    <option name="auto-detected" hit="Path to adb binary (auto-detected from ANDROID_HOME if blank)" />
+    <option name="binary" hit="Path to adb binary (auto-detected from ANDROID_HOME if blank)" />
+    <option name="blank" hit="Path to adb binary (auto-detected from ANDROID_HOME if blank)" />
+    <option name="from" hit="Path to adb binary (auto-detected from ANDROID_HOME if blank)" />
+    <option name="home" hit="Path to adb binary (auto-detected from ANDROID_HOME if blank)" />
+    <option name="if" hit="Path to adb binary (auto-detected from ANDROID_HOME if blank)" />
+    <option name="path" hit="Path to adb binary (auto-detected from ANDROID_HOME if blank)" />
+    <option name="to" hit="Path to adb binary (auto-detected from ANDROID_HOME if blank)" />
+    <option name="android" hit="Path to android.ini rules file (auto-detected if blank)" />
+    <option name="auto-detected" hit="Path to android.ini rules file (auto-detected if blank)" />
+    <option name="blank" hit="Path to android.ini rules file (auto-detected if blank)" />
+    <option name="file" hit="Path to android.ini rules file (auto-detected if blank)" />
+    <option name="if" hit="Path to android.ini rules file (auto-detected if blank)" />
+    <option name="ini" hit="Path to android.ini rules file (auto-detected if blank)" />
+    <option name="path" hit="Path to android.ini rules file (auto-detected if blank)" />
+    <option name="rules" hit="Path to android.ini rules file (auto-detected if blank)" />
+    <option name="to" hit="Path to android.ini rules file (auto-detected if blank)" />
     <option name="configuration" hit="Path to the LogitCat configuration file (optional)" />
     <option name="file" hit="Path to the LogitCat configuration file (optional)" />
     <option name="logitcat" hit="Path to the LogitCat configuration file (optional)" />
@@ -57,11 +86,23 @@
     <option name="path" hit="Path to the LogitCat executable" />
     <option name="the" hit="Path to the LogitCat executable" />
     <option name="to" hit="Path to the LogitCat executable" />
+    <option name="adb" hit="Pipes adb logcat through LogitCat automatically when you hit Run" />
+    <option name="automatically" hit="Pipes adb logcat through LogitCat automatically when you hit Run" />
+    <option name="hit" hit="Pipes adb logcat through LogitCat automatically when you hit Run" />
+    <option name="logcat" hit="Pipes adb logcat through LogitCat automatically when you hit Run" />
+    <option name="logitcat" hit="Pipes adb logcat through LogitCat automatically when you hit Run" />
+    <option name="pipes" hit="Pipes adb logcat through LogitCat automatically when you hit Run" />
+    <option name="run" hit="Pipes adb logcat through LogitCat automatically when you hit Run" />
+    <option name="through" hit="Pipes adb logcat through LogitCat automatically when you hit Run" />
+    <option name="when" hit="Pipes adb logcat through LogitCat automatically when you hit Run" />
+    <option name="you" hit="Pipes adb logcat through LogitCat automatically when you hit Run" />
     <option name="9090" hit="Port for LogitCat dashboard (default: 9090)" />
     <option name="dashboard" hit="Port for LogitCat dashboard (default: 9090)" />
     <option name="default" hit="Port for LogitCat dashboard (default: 9090)" />
     <option name="for" hit="Port for LogitCat dashboard (default: 9090)" />
     <option name="logitcat" hit="Port for LogitCat dashboard (default: 9090)" />
     <option name="port" hit="Port for LogitCat dashboard (default: 9090)" />
+    <option name="adb" hit="adb path:" />
+    <option name="path" hit="adb path:" />
   </configurable>
 </options>
