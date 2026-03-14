@@ -82,7 +82,7 @@ class LogPanel(private val project: Project) : JPanel(BorderLayout()) {
                 border = JBUI.Borders.customLine(JBColor(Color(0x30363d), Color(0x30363d)))
                 preferredSize = Dimension(28, 22)
                 toolTipText = levelName(ch)
-                addActionListener { activeLevels.set(ch, isSelected); refilter() }
+                addActionListener { activeLevels.set(ch, isSelected); refilter(); reconnectIfLevelChanged() }
             }
             levelBtns[ch] = btn
             toolbar.add(btn)
@@ -224,16 +224,33 @@ class LogPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     // ── SSE connection ────────────────────────────────────────────────────────
 
+    /** The lowest level currently enabled — sent to server as ?level= param */
+    private fun minActiveLevel(): String {
+        val order = listOf('V','D','I','W','E','F')
+        return order.firstOrNull { it in activeLevels }?.toString() ?: "V"
+    }
+
     private fun connect() {
         val settings = LogitCatSettings.getInstance()
         logClient?.disconnect()
         logClient = LogStreamClient(
-            port = settings.dashboardPort,
-            onLine = { addLine(it) },
-            onConnected = {},
+            port      = settings.dashboardPort,
+            minLevel  = minActiveLevel(),
+            onLine    = { addLine(it) },
+            onConnected    = {},
             onDisconnected = {}
         )
         logClient?.connect()
+    }
+
+    /** Reconnect only if the effective minimum level changed (avoids reconnect on every click) */
+    private var lastMinLevel = "V"
+    private fun reconnectIfLevelChanged() {
+        val newMin = minActiveLevel()
+        if (newMin != lastMinLevel) {
+            lastMinLevel = newMin
+            connect()
+        }
     }
 
     fun reconnect() { connect() }

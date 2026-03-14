@@ -10,6 +10,7 @@ import java.net.URL
  */
 class LogStreamClient(
     private val port: Int,
+    private val minLevel: String = "V",   // server-side filter: V D I W E F
     private val onLine: (LogLine) -> Unit,
     private val onConnected: () -> Unit,
     private val onDisconnected: () -> Unit
@@ -22,7 +23,7 @@ class LogStreamClient(
         thread = Thread({
             while (running) {
                 try {
-                    val url = URL("http://localhost:$port/api/logs")
+                    val url = URL("http://localhost:$port/api/logs?level=$minLevel")
                     val conn = url.openConnection() as HttpURLConnection
                     conn.setRequestProperty("Accept", "text/event-stream")
                     conn.setRequestProperty("Cache-Control", "no-cache")
