@@ -28,6 +28,7 @@ class LogitCatService(private val project: Project) {
         fun onAlertAdded(alert: Alert)
         fun onConnectionChanged(connected: Boolean)
         fun onAlertsCleared()
+        fun onCaptureStateChanged(capturing: Boolean, device: DeviceInfo?, pkg: ProcessInfo?) {}
     }
 
     fun addListener(listener: AlertListener) {
@@ -38,31 +39,54 @@ class LogitCatService(private val project: Project) {
         listeners.remove(listener)
     }
 
-    // ── Android logcat auto-capture ──────────────────────────────────────────
+    // ── Android logcat capture ───────────────────────────────────────────────
     private var logcatProcess: Process? = null
+    var selectedDevice: DeviceInfo? = null
+    var selectedPackage: ProcessInfo? = null
 
-    fun startAndroidCapture() {
+    /** Start (or restart) logcat capture for the given device + optional package. */
+    fun startAndroidCapture(
+        device: DeviceInfo? = selectedDevice,
+        pkg: ProcessInfo?   = selectedPackage,
+        delayMs: Long       = 0L
+    ) {
+        stopAndroidCapture()
+
         val settings = LogitCatSettings.getInstance()
-        if (!settings.autoStartOnRun) return
-
-        val exec   = resolveExec(settings.executablePath)    ?: return
-        val cfg    = resolveAndroidCfg(settings.androidConfigPath) ?: return
-        val adb    = resolveAdb(settings.adbPath) ?: run {
-            notify("LogitCat: adb not found — set path in Settings → Tools → LogitCat",
-                NotificationType.WARNING)
-            return
+        val exec = resolveExec(settings.executablePath) ?: run {
+            notify("LogitCat: binary not found — set path in Settings → Tools → LogitCat",
+                NotificationType.WARNING); return
         }
+        val cfg = resolveAndroidCfg(settings.androidConfigPath) ?: run {
+            notify("LogitCat: android.ini not found — set path in Settings",
+                NotificationType.WARNING); return
+        }
+        val adb = resolveAdb(settings.adbPath) ?: run {
+            notify("LogitCat: adb not found — set path in Settings → Tools → LogitCat",
+                NotificationType.WARNING); return
+        }
+
+        // Pick device — use selected, or first available
+        val targetDevice = device ?: DeviceManager.listDevices(adb).firstOrNull() ?: run {
+            notify("LogitCat: no ADB devices connected", NotificationType.WARNING); return
+        }
+        selectedDevice  = targetDevice
+        selectedPackage = pkg
 
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
-                Thread.sleep(2000) // wait for device
-                logcatProcess = ProcessBuilder("sh", "-c",
-                    "\"$adb\" logcat | \"$exec\" pipe \"$cfg\" --source android-studio --dashboard")
+                if (delayMs > 0) Thread.sleep(delayMs)
+                val cmd = DeviceManager.buildPipeCommand(
+                    adb, targetDevice.serial, pkg?.packageName, exec, cfg
+                )
+                logcatProcess = ProcessBuilder("sh", "-c", cmd)
                     .redirectErrorStream(true).start()
-                notify("⚡ LogitCat: capturing logcat — watching for crashes & errors",
-                    NotificationType.INFORMATION)
+
+                val label = if (pkg != null) pkg.packageName else targetDevice.label
+                notify("⚡ LogitCat: capturing $label", NotificationType.INFORMATION)
+                listeners.forEach { it.onCaptureStateChanged(true, targetDevice, pkg) }
             } catch (e: Exception) {
-                notify("LogitCat: logcat pipe failed — ${e.message}", NotificationType.WARNING)
+                notify("LogitCat: logcat failed — ${e.message}", NotificationType.WARNING)
             }
         }
     }
@@ -70,7 +94,10 @@ class LogitCatService(private val project: Project) {
     fun stopAndroidCapture() {
         logcatProcess?.destroy()
         logcatProcess = null
+        listeners.forEach { it.onCaptureStateChanged(false, selectedDevice, selectedPackage) }
     }
+
+    fun isCapturing(): Boolean = logcatProcess?.isAlive == true
 
     private fun subscribeToExecutions() {
         project.messageBus.connect().subscribe(ExecutionManager.EXECUTION_TOPIC,
