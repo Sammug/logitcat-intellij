@@ -1,0 +1,73 @@
+<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+  <version>0.1.0</version>
+  <idea-version since-build="231" until-build="251.*" />
+  <!-- Unique identifier of the plugin. It should be FQN. It cannot be changed between the plugin versions. -->
+  <id>com.sammug.logitcat</id>
+  <!-- Public plugin name should be written in Title Case.
+         Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-name -->
+  <name>LogitCat</name>
+  <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
+  <vendor>Sammug</vendor>
+  <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
+         Simple HTML elements (text formatting, paragraphs, and lists) can be added inside of <![CDATA[ ]]> tag.
+         Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-description -->
+  <description><![CDATA[LogitCat plugin for IntelliJ IDEA provides real-time log monitoring and alerting capabilities.
+    
+    Features:
+    - Real-time log monitoring via Server-Sent Events (SSE)
+    - Alert management with severity levels (CRITICAL, WARN, INFO)
+    - Tool window for viewing alerts and detailed information
+    - Status bar widget showing connection status and alert count
+    - Dashboard integration for web-based log viewing
+    - Configurable settings for LogitCat daemon
+    
+    Connect your LogitCat daemon and monitor your application logs directly from your IDE.]]></description>
+  <!-- Product and plugin compatibility requirements.
+         Read more: https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
+  <depends>com.intellij.modules.platform</depends>
+  <!-- Extension points defined by the plugin.
+         Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
+  <extensions defaultExtensionNs="com.intellij">
+    <!-- Application Services -->
+    <applicationService serviceImplementation="com.sammug.logitcat.LogitCatSettings" />
+    <!-- Project Services -->
+    <projectService serviceImplementation="com.sammug.logitcat.LogitCatService" />
+    <!-- Tool Window -->
+    <toolWindow id="LogitCat" displayName="LogitCat" anchor="bottom" icon="AllIcons.Debugger.Console" factoryClass="com.sammug.logitcat.LogitCatToolWindowFactory" />
+    <!-- Status Bar Widget -->
+    <statusBarWidgetFactory id="com.sammug.logitcat.status" implementation="com.sammug.logitcat.LogitCatStatusBarWidgetFactory" order="before selectionInfo" />
+    <!-- Settings Configurable -->
+    <projectConfigurable parentId="tools" instance="com.sammug.logitcat.LogitCatSettingsConfigurable" id="com.sammug.logitcat.settings" displayName="LogitCat" />
+    <!-- Notification Group -->
+    <notificationGroup id="LogitCat" displayType="BALLOON" key="LogitCat Notifications" />
+  </extensions>
+  <!-- Actions -->
+  <actions>
+    <!-- Tools Menu Actions -->
+    <group id="LogitCat.ToolsMenuGroup" text="LogitCat" description="LogitCat Actions">
+      <add-to-group group-id="ToolsMenu" anchor="last" />
+      <action id="LogitCat.Start" class="com.sammug.logitcat.actions.StartLogitCatAction" text="Start LogitCat" description="Start LogitCat daemon" />
+      <action id="LogitCat.Stop" class="com.sammug.logitcat.actions.StopLogitCatAction" text="Stop LogitCat" description="Stop LogitCat daemon" />
+      <action id="LogitCat.Clear" class="com.sammug.logitcat.actions.ClearAlertsAction" text="Clear Alerts" description="Clear all alerts" />
+      <action id="LogitCat.Dashboard" class="com.sammug.logitcat.actions.OpenDashboardAction" text="Open Dashboard" description="Open LogitCat dashboard in browser" />
+    </group>
+    <!-- Toolbar Actions for Tool Window -->
+    <group id="LogitCat.ToolbarGroup" text="LogitCat Toolbar">
+      <reference ref="LogitCat.Start" />
+      <reference ref="LogitCat.Stop" />
+      <separator />
+      <reference ref="LogitCat.Clear" />
+      <reference ref="LogitCat.Dashboard" />
+    </group>
+  </actions>
+  <change-notes><![CDATA[Initial release with the following features:
+      <ul>
+        <li>Real-time log monitoring via SSE</li>
+        <li>Alert management with severity-based colors</li>
+        <li>Tool window with alert list and detail panels</li>
+        <li>Status bar widget showing connection status</li>
+        <li>Configurable settings for LogitCat daemon</li>
+        <li>Dashboard integration</li>
+      </ul>]]></change-notes>
+</idea-plugin>

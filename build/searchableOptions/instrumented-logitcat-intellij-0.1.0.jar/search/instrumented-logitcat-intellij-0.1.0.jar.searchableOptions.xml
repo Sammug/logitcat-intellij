@@ -1,0 +1,67 @@
+<options>
+  <configurable id="preferences.keymap" configurable_name="Keymap">
+    <option name="alerts" path="ActionManager" hit="Clear Alerts" />
+    <option name="clear" path="ActionManager" hit="Clear Alerts" />
+    <option name="alerts" path="ActionManager" hit="Clear all alerts" />
+    <option name="all" path="ActionManager" hit="Clear all alerts" />
+    <option name="clear" path="ActionManager" hit="Clear all alerts" />
+    <option name="dashboard" path="ActionManager" hit="Open Dashboard" />
+    <option name="open" path="ActionManager" hit="Open Dashboard" />
+    <option name="browser" path="ActionManager" hit="Open LogitCat dashboard in browser" />
+    <option name="dashboard" path="ActionManager" hit="Open LogitCat dashboard in browser" />
+    <option name="in" path="ActionManager" hit="Open LogitCat dashboard in browser" />
+    <option name="logitcat" path="ActionManager" hit="Open LogitCat dashboard in browser" />
+    <option name="open" path="ActionManager" hit="Open LogitCat dashboard in browser" />
+    <option name="logitcat" path="ActionManager" hit="Start LogitCat" />
+    <option name="start" path="ActionManager" hit="Start LogitCat" />
+    <option name="daemon" path="ActionManager" hit="Start LogitCat daemon" />
+    <option name="logitcat" path="ActionManager" hit="Start LogitCat daemon" />
+    <option name="start" path="ActionManager" hit="Start LogitCat daemon" />
+    <option name="logitcat" path="ActionManager" hit="Stop LogitCat" />
+    <option name="stop" path="ActionManager" hit="Stop LogitCat" />
+    <option name="daemon" path="ActionManager" hit="Stop LogitCat daemon" />
+    <option name="logitcat" path="ActionManager" hit="Stop LogitCat daemon" />
+    <option name="stop" path="ActionManager" hit="Stop LogitCat daemon" />
+  </configurable>
+  <configurable id="com.sammug.logitcat.settings" configurable_name="LogitCat">
+    <option name="auto-start" hit="Auto-start LogitCat with project" />
+    <option name="logitcat" hit="Auto-start LogitCat with project" />
+    <option name="project" hit="Auto-start LogitCat with project" />
+    <option name="with" hit="Auto-start LogitCat with project" />
+    <option name="config" hit="Config path:" />
+    <option name="path" hit="Config path:" />
+    <option name="dashboard" hit="Dashboard port:" />
+    <option name="port" hit="Dashboard port:" />
+    <option name="executable" hit="Executable path:" />
+    <option name="path" hit="Executable path:" />
+    <option name="logitcat" hit="LogitCat" />
+    <option name="alerts" hit="Max alerts:" />
+    <option name="max" hit="Max alerts:" />
+    <option name="200" hit="Maximum number of alerts to keep (default: 200)" />
+    <option name="alerts" hit="Maximum number of alerts to keep (default: 200)" />
+    <option name="default" hit="Maximum number of alerts to keep (default: 200)" />
+    <option name="keep" hit="Maximum number of alerts to keep (default: 200)" />
+    <option name="maximum" hit="Maximum number of alerts to keep (default: 200)" />
+    <option name="number" hit="Maximum number of alerts to keep (default: 200)" />
+    <option name="of" hit="Maximum number of alerts to keep (default: 200)" />
+    <option name="to" hit="Maximum number of alerts to keep (default: 200)" />
+    <option name="configuration" hit="Path to the LogitCat configuration file (optional)" />
+    <option name="file" hit="Path to the LogitCat configuration file (optional)" />
+    <option name="logitcat" hit="Path to the LogitCat configuration file (optional)" />
+    <option name="optional" hit="Path to the LogitCat configuration file (optional)" />
+    <option name="path" hit="Path to the LogitCat configuration file (optional)" />
+    <option name="the" hit="Path to the LogitCat configuration file (optional)" />
+    <option name="to" hit="Path to the LogitCat configuration file (optional)" />
+    <option name="executable" hit="Path to the LogitCat executable" />
+    <option name="logitcat" hit="Path to the LogitCat executable" />
+    <option name="path" hit="Path to the LogitCat executable" />
+    <option name="the" hit="Path to the LogitCat executable" />
+    <option name="to" hit="Path to the LogitCat executable" />
+    <option name="9090" hit="Port for LogitCat dashboard (default: 9090)" />
+    <option name="dashboard" hit="Port for LogitCat dashboard (default: 9090)" />
+    <option name="default" hit="Port for LogitCat dashboard (default: 9090)" />
+    <option name="for" hit="Port for LogitCat dashboard (default: 9090)" />
+    <option name="logitcat" hit="Port for LogitCat dashboard (default: 9090)" />
+    <option name="port" hit="Port for LogitCat dashboard (default: 9090)" />
+  </configurable>
+</options>
