@@ -57,7 +57,7 @@ class LogitCatService(private val project: Project) {
             try {
                 Thread.sleep(2000) // wait for device
                 logcatProcess = ProcessBuilder("sh", "-c",
-                    "\"$adb\" logcat | \"$exec\" pipe \"$cfg\" --source android-studio")
+                    "\"$adb\" logcat | \"$exec\" pipe \"$cfg\" --source android-studio --dashboard")
                     .redirectErrorStream(true).start()
                 notify("⚡ LogitCat: capturing logcat — watching for crashes & errors",
                     NotificationType.INFORMATION)
