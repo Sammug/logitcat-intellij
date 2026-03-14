@@ -45,7 +45,7 @@
             id="LogitCat" 
             displayName="LogitCat" 
             anchor="bottom" 
-            icon="AllIcons.Debugger.Console"
+            icon="/icons/logitcat.svg"
             factoryClass="com.sammug.logitcat.LogitCatToolWindowFactory"/>
 
         <!-- Status Bar Widget -->
