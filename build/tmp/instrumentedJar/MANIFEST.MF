@@ -4,6 +4,6 @@ Build-JVM: 17.0.14 (Amazon.com Inc. 17.0.14+7-LTS)
 Version: 0.1.0
 Build-Plugin: Gradle IntelliJ Plugin
 Build-Plugin-Version: 1.17.3
-Build-OS: Mac OS X 26.3 aarch64
+Build-OS: Mac OS X 26.3.1 aarch64
 Build-SDK: IC-2023.1.6
 

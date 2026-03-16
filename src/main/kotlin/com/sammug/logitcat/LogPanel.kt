@@ -1,150 +1,159 @@
 package com.sammug.logitcat
 
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.ui.JBColor
+import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.JBUI
 import java.awt.*
-import java.awt.event.MouseAdapter
-import java.awt.event.MouseEvent
+import java.util.concurrent.ConcurrentLinkedQueue
 import javax.swing.*
-import javax.swing.text.*
+import javax.swing.event.DocumentListener
 
 /**
- * LogPanel — streams all log lines with Logcat-style level + text filtering.
- *
- *  Toolbar:  [V][D][I][W][E][F]  [Tag: ___________]  [Search: ___________]  [Clear] [Auto-scroll ☑]
- *  Body:     coloured log lines in a monospace JTextPane
+ * LogPanel — Logcat-style log view:
+ * - JList with custom cell renderer (virtual/lazy — only visible rows painted → no freeze)
+ * - Incoming lines queued off-EDT, batched onto model every 50 ms
+ * - Level toggle buttons, tag filter, text search
+ * - Columns: timestamp | pid-tid | tag | ▌level | message
  */
 class LogPanel(private val project: Project) : JPanel(BorderLayout()) {
 
-    // ── Colours ───────────────────────────────────────────────────────────────
-    private val COL_V = JBColor(Color(0x7d8590), Color(0x7d8590))
-    private val COL_D = JBColor(Color(0x58a6ff), Color(0x58a6ff))
-    private val COL_I = JBColor(Color(0x3fb950), Color(0x3fb950))
-    private val COL_W = JBColor(Color(0xe3b341), Color(0xe3b341))
-    private val COL_E = JBColor(Color(0xf85149), Color(0xf85149))
-    private val COL_F = JBColor(Color(0xff6b6b), Color(0xff6b6b))
-    private val COL_DEFAULT = JBColor(Color(0xadbac7), Color(0xadbac7))
-    private val COL_BG = JBColor(Color(0x0d1117), Color(0x0d1117))
+    // ── Level colours (matching IntelliJ Darcula + AS Logcat) ────────────────
+    companion object {
+        val C_V = JBColor(Color(0x7d8590), Color(0x8b949e))
+        val C_D = JBColor(Color(0x4a86c8), Color(0x6897bb))
+        val C_I = JBColor(Color(0x4e9a50), Color(0x6a8759))
+        val C_W = JBColor(Color(0xbbaa00), Color(0xe3b341))
+        val C_E = JBColor(Color(0xcc3333), Color(0xf85149))
+        val C_F = JBColor(Color(0xff4444), Color(0xff6b6b))
+        val C_DEF = JBColor(Color(0xadbac7), Color(0xadbac7))
+        val BG = JBColor(Color(0x1e1e1e), Color(0x1e1e1e))
+        val BG_SEL = JBColor(Color(0x2d4a6e), Color(0x2d4a6e))
+        val C_META = JBColor(Color(0x6e7681), Color(0x6e7681))
+
+        fun levelColor(ch: Char) = when (ch) {
+            'V' -> C_V; 'D' -> C_D; 'I' -> C_I
+            'W' -> C_W; 'E' -> C_E; 'F' -> C_F
+            else -> C_DEF
+        }
+        fun levelName(ch: Char) = when (ch) {
+            'V' -> "Verbose"; 'D' -> "Debug"; 'I' -> "Info"
+            'W' -> "Warn";    'E' -> "Error"; 'F' -> "Fatal"
+            else -> ch.toString()
+        }
+    }
 
     // ── State ─────────────────────────────────────────────────────────────────
-    private val MAX_LINES = 5000
-    private val allLines  = ArrayDeque<LogLine>(MAX_LINES + 1)
+    private val MAX_LINES    = 10_000
+    private val allLines     = ArrayDeque<ParsedLogLine>(MAX_LINES + 64)  // full buffer
     private val activeLevels = mutableSetOf('V','D','I','W','E','F')
-
     private var tagFilter    = ""
-    private var searchFilter = ""
+    private var textFilter   = ""
     private var autoScroll   = true
+    private var lastMinLevel = "V"
 
-    // ── UI ────────────────────────────────────────────────────────────────────
-    private val textPane   = JTextPane()
-    private val scrollPane = JBScrollPane(textPane)
-    private val tagField   = JTextField(14)
-    private val searchField= JTextField(16)
-    private val levelBtns  = mutableMapOf<Char, JToggleButton>()
-    private val statusLbl  = JLabel("● 0 lines")
+    // Off-EDT queue — background threads drop lines here
+    private val pending = ConcurrentLinkedQueue<ParsedLogLine>()
+
+    // ── Model & list ──────────────────────────────────────────────────────────
+    private val model      = DefaultListModel<ParsedLogLine>()
+    private val logList    = JBList(model)
+    private val scrollPane = JBScrollPane(logList)
+
+    // ── Toolbar widgets ───────────────────────────────────────────────────────
+    private val levelBtns   = mutableMapOf<Char, JToggleButton>()
+    private val tagField    = JTextField(12)
+    private val searchField = JTextField(16)
+    private val statusLbl   = JLabel("0 lines")
+
+    // Flush timer — drains pending queue onto model every 50 ms on the EDT
+    private val flushTimer = Timer(50) { flushPending() }
 
     // SSE client
     private var logClient: LogStreamClient? = null
 
     init {
-        build()
+        buildUI()
+        flushTimer.start()
         connect()
     }
 
-    private fun build() {
-        // ── Text pane ─────────────────────────────────────────────────────────
-        textPane.isEditable = false
-        textPane.background = COL_BG
-        textPane.font = Font(Font.MONOSPACED, Font.PLAIN, JBUI.scaleFontSize(12f).toInt())
-        textPane.border = JBUI.Borders.empty(4, 8)
+    // ── Build UI ──────────────────────────────────────────────────────────────
+
+    private fun buildUI() {
+        background = BG
+
+        // ── List ──────────────────────────────────────────────────────────────
+        logList.cellRenderer = LogCellRenderer()
+        logList.background   = BG
+        logList.selectionBackground = BG_SEL
+        logList.selectionForeground = Color.WHITE
+        logList.fixedCellHeight = JBUI.scale(18)
+        logList.font = Font(Font.MONOSPACED, Font.PLAIN, JBUI.scaleFontSize(11.5f).toInt())
 
         // ── Toolbar ───────────────────────────────────────────────────────────
-        val toolbar = JPanel(FlowLayout(FlowLayout.LEFT, 4, 2))
+        val toolbar = JPanel(FlowLayout(FlowLayout.LEFT, 3, 2))
         toolbar.background = JBColor(Color(0x161b22), Color(0x161b22))
         toolbar.border = JBUI.Borders.compound(
             JBUI.Borders.customLine(JBColor(Color(0x30363d), Color(0x30363d)), 0, 0, 1, 0),
-            JBUI.Borders.empty(3, 6)
+            JBUI.Borders.empty(2, 4)
         )
 
-        // Level toggle buttons
-        val levels = listOf('V' to COL_V, 'D' to COL_D, 'I' to COL_I,
-                            'W' to COL_W, 'E' to COL_E, 'F' to COL_F)
-        toolbar.add(JLabel("Level: ").also { it.foreground = JBColor.GRAY; it.font = it.font.deriveFont(11f) })
-        for ((ch, col) in levels) {
+        // Level buttons
+        for ((ch, col) in listOf('V' to C_V, 'D' to C_D, 'I' to C_I, 'W' to C_W, 'E' to C_E, 'F' to C_F)) {
             val btn = JToggleButton(ch.toString()).apply {
-                isSelected = true
-                font = Font(Font.MONOSPACED, Font.BOLD, JBUI.scaleFontSize(11f).toInt())
-                foreground = col
-                background = JBColor(Color(0x21262d), Color(0x21262d))
-                border = JBUI.Borders.customLine(JBColor(Color(0x30363d), Color(0x30363d)))
-                preferredSize = Dimension(28, 22)
-                toolTipText = levelName(ch)
+                isSelected   = true
+                font         = Font(Font.MONOSPACED, Font.BOLD, JBUI.scaleFontSize(10.5f).toInt())
+                foreground   = col
+                background   = JBColor(Color(0x21262d), Color(0x21262d))
+                border       = JBUI.Borders.customLine(JBColor(Color(0x30363d), Color(0x30363d)))
+                preferredSize= Dimension(JBUI.scale(24), JBUI.scale(20))
+                toolTipText  = levelName(ch)
+                isFocusPainted = false
                 addActionListener { activeLevels.set(ch, isSelected); refilter(); reconnectIfLevelChanged() }
             }
             levelBtns[ch] = btn
             toolbar.add(btn)
         }
 
-        toolbar.add(Box.createHorizontalStrut(8))
+        toolbar.add(Box.createHorizontalStrut(6))
 
         // Tag filter
-        toolbar.add(JLabel("Tag: ").also { it.foreground = JBColor.GRAY; it.font = it.font.deriveFont(11f) })
-        tagField.font = Font(Font.MONOSPACED, Font.PLAIN, 11)
-        tagField.background = JBColor(Color(0x161b22), Color(0x161b22))
-        tagField.foreground = JBColor.WHITE
-        tagField.caretColor = JBColor.WHITE
-        tagField.border = JBUI.Borders.customLine(JBColor(Color(0x30363d), Color(0x30363d)))
-        tagField.toolTipText = "Filter by tag (e.g. OkHttp, MainActivity)"
-        tagField.document.addDocumentListener(object : javax.swing.event.DocumentListener {
-            override fun insertUpdate(e: javax.swing.event.DocumentEvent?) { tagFilter = tagField.text; refilter() }
-            override fun removeUpdate(e: javax.swing.event.DocumentEvent?) { tagFilter = tagField.text; refilter() }
-            override fun changedUpdate(e: javax.swing.event.DocumentEvent?) {}
-        })
+        toolbar.add(label("Tag:"))
+        styleInput(tagField)
+        tagField.toolTipText = "Filter by tag"
+        tagField.document.addDocumentListener(quickFilter { tagFilter = tagField.text; refilter() })
         toolbar.add(tagField)
 
-        toolbar.add(Box.createHorizontalStrut(6))
+        toolbar.add(Box.createHorizontalStrut(4))
 
         // Text search
-        toolbar.add(JLabel("Search: ").also { it.foreground = JBColor.GRAY; it.font = it.font.deriveFont(11f) })
-        searchField.font = Font(Font.MONOSPACED, Font.PLAIN, 11)
-        searchField.background = JBColor(Color(0x161b22), Color(0x161b22))
-        searchField.foreground = JBColor.WHITE
-        searchField.caretColor = JBColor.WHITE
-        searchField.border = JBUI.Borders.customLine(JBColor(Color(0x30363d), Color(0x30363d)))
-        searchField.toolTipText = "Search log messages"
-        searchField.document.addDocumentListener(object : javax.swing.event.DocumentListener {
-            override fun insertUpdate(e: javax.swing.event.DocumentEvent?) { searchFilter = searchField.text; refilter() }
-            override fun removeUpdate(e: javax.swing.event.DocumentEvent?) { searchFilter = searchField.text; refilter() }
-            override fun changedUpdate(e: javax.swing.event.DocumentEvent?) {}
-        })
+        toolbar.add(label("Search:"))
+        styleInput(searchField)
+        searchField.toolTipText = "Search messages"
+        searchField.document.addDocumentListener(quickFilter { textFilter = searchField.text; refilter() })
         toolbar.add(searchField)
 
-        toolbar.add(Box.createHorizontalStrut(6))
+        toolbar.add(Box.createHorizontalStrut(4))
 
-        // Clear button
-        val clearBtn = JButton("Clear").apply {
-            font = font.deriveFont(11f)
-            toolTipText = "Clear log output"
+        // Clear
+        val clearBtn = JButton("✕ Clear").apply {
+            font = font.deriveFont(11f); isFocusPainted = false
             addActionListener { clearLogs() }
         }
         toolbar.add(clearBtn)
 
-        // Auto-scroll toggle
-        val autoScrollBtn = JToggleButton("↓").apply {
-            isSelected = true
-            toolTipText = "Auto-scroll to bottom"
-            font = font.deriveFont(11f)
-            preferredSize = Dimension(28, 22)
+        // Auto-scroll
+        val asBtn = JToggleButton("↓ Scroll").apply {
+            isSelected = true; font = font.deriveFont(11f); isFocusPainted = false
             addActionListener { autoScroll = isSelected }
         }
-        toolbar.add(autoScrollBtn)
+        toolbar.add(asBtn)
 
         // Status
         statusLbl.font = statusLbl.font.deriveFont(10f)
-        statusLbl.foreground = JBColor.GRAY
+        statusLbl.foreground = C_META
         statusLbl.border = JBUI.Borders.emptyLeft(8)
         toolbar.add(statusLbl)
 
@@ -152,83 +161,65 @@ class LogPanel(private val project: Project) : JPanel(BorderLayout()) {
         add(scrollPane, BorderLayout.CENTER)
     }
 
-    // ── Log ingestion ─────────────────────────────────────────────────────────
+    // ── Ingestion (called from background SSE thread) ─────────────────────────
 
     fun addLine(line: LogLine) {
-        ApplicationManager.getApplication().invokeLater {
-            synchronized(allLines) {
-                allLines.addLast(line)
-                if (allLines.size > MAX_LINES) allLines.removeFirst()
-            }
-            if (matchesFilter(line)) appendToPane(line)
-            updateStatus()
+        val parsed = ParsedLogLine.from(line)
+        synchronized(allLines) {
+            allLines.addLast(parsed)
+            if (allLines.size > MAX_LINES) allLines.removeFirst()
+        }
+        if (matchesFilter(parsed)) pending.offer(parsed)
+    }
+
+    // ── EDT flush (every 50 ms) ───────────────────────────────────────────────
+
+    private fun flushPending() {
+        val batch = ArrayList<ParsedLogLine>(64)
+        while (true) batch.add(pending.poll() ?: break)
+        if (batch.isEmpty()) return
+
+        // Remove oldest if over limit
+        val overflow = model.size() + batch.size - MAX_LINES
+        if (overflow > 0) {
+            model.removeRange(0, minOf(overflow - 1, model.size() - 1))
+        }
+        batch.forEach { model.addElement(it) }
+
+        statusLbl.text = "${model.size()} lines"
+        if (autoScroll && model.size() > 0) {
+            logList.ensureIndexIsVisible(model.size() - 1)
         }
     }
 
-    private fun matchesFilter(line: LogLine): Boolean {
-        val lc = line.levelChar()
-        if (lc !in activeLevels) return false
-        if (tagFilter.isNotBlank() && !line.tag.contains(tagFilter, ignoreCase = true) &&
+    // ── Filtering ─────────────────────────────────────────────────────────────
+
+    private fun matchesFilter(line: ParsedLogLine): Boolean {
+        if (line.level !in activeLevels) return false
+        if (tagFilter.isNotBlank()  && !line.tag.contains(tagFilter, ignoreCase = true) &&
             !line.source.contains(tagFilter, ignoreCase = true)) return false
-        if (searchFilter.isNotBlank() && !line.message.contains(searchFilter, ignoreCase = true) &&
-            !line.raw.contains(searchFilter, ignoreCase = true)) return false
+        if (textFilter.isNotBlank() && !line.message.contains(textFilter, ignoreCase = true) &&
+            !line.raw.contains(textFilter, ignoreCase = true)) return false
         return true
     }
 
     private fun refilter() {
-        val doc = DefaultStyledDocument()
-        synchronized(allLines) {
-            allLines.filter { matchesFilter(it) }.forEach { appendLine(doc, it) }
-        }
-        textPane.document = doc
-        updateStatus()
-        if (autoScroll) scrollToBottom()
-    }
-
-    private fun appendToPane(line: LogLine) {
-        appendLine(textPane.styledDocument, line)
-        if (autoScroll) scrollToBottom()
-    }
-
-    private fun appendLine(doc: StyledDocument, line: LogLine) {
-        val lc  = line.levelChar()
-        val col = levelColor(lc)
-        val ts  = line.time.substringAfter('T').substringBeforeLast('+').take(12)
-        val tag = line.tag.ifBlank { line.source }.take(20).padEnd(20)
-        val txt = "$ts  $lc  $tag  ${line.message}\n"
-
-        val style = doc.addStyle(null, null)
-        StyleConstants.setForeground(style, col)
-        StyleConstants.setFontFamily(style, Font.MONOSPACED)
-        StyleConstants.setFontSize(style, JBUI.scaleFontSize(11f).toInt())
-        try { doc.insertString(doc.length, txt, style) } catch (_: Exception) {}
-    }
-
-    private fun scrollToBottom() {
-        SwingUtilities.invokeLater {
-            val bar = scrollPane.verticalScrollBar
-            bar.value = bar.maximum
-        }
+        model.clear()
+        pending.clear()
+        val filtered = synchronized(allLines) { allLines.filter { matchesFilter(it) } }
+        filtered.forEach { model.addElement(it) }
+        statusLbl.text = "${model.size()} lines"
+        if (autoScroll && model.size() > 0) logList.ensureIndexIsVisible(model.size() - 1)
     }
 
     private fun clearLogs() {
         synchronized(allLines) { allLines.clear() }
-        textPane.document = DefaultStyledDocument()
-        updateStatus()
-    }
-
-    private fun updateStatus() {
-        val visible = textPane.document.length
-        statusLbl.text = "● ${allLines.size} lines"
+        pending.clear()
+        model.clear()
+        statusLbl.text = "0 lines"
     }
 
     // ── SSE connection ────────────────────────────────────────────────────────
-
-    /** The lowest level currently enabled — sent to server as ?level= param */
-    private fun minActiveLevel(): String {
-        val order = listOf('V','D','I','W','E','F')
-        return order.firstOrNull { it in activeLevels }?.toString() ?: "V"
-    }
 
     private fun connect() {
         val settings = LogitCatSettings.getInstance()
@@ -243,35 +234,121 @@ class LogPanel(private val project: Project) : JPanel(BorderLayout()) {
         logClient?.connect()
     }
 
-    /** Reconnect only if the effective minimum level changed (avoids reconnect on every click) */
-    private var lastMinLevel = "V"
+    private fun minActiveLevel(): String {
+        val order = listOf('V','D','I','W','E','F')
+        return order.firstOrNull { it in activeLevels }?.toString() ?: "V"
+    }
+
     private fun reconnectIfLevelChanged() {
         val newMin = minActiveLevel()
-        if (newMin != lastMinLevel) {
-            lastMinLevel = newMin
-            connect()
-        }
+        if (newMin != lastMinLevel) { lastMinLevel = newMin; connect() }
     }
 
     fun reconnect() { connect() }
 
-    fun dispose() { logClient?.disconnect() }
+    fun dispose() {
+        flushTimer.stop()
+        logClient?.disconnect()
+    }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private fun levelColor(ch: Char) = when (ch) {
-        'V' -> COL_V; 'D' -> COL_D; 'I' -> COL_I
-        'W' -> COL_W; 'E' -> COL_E; 'F' -> COL_F
-        else -> COL_DEFAULT
+    private fun label(text: String) = JLabel(text).also {
+        it.foreground = C_META; it.font = it.font.deriveFont(11f)
     }
 
-    private fun levelName(ch: Char) = when (ch) {
-        'V' -> "Verbose"; 'D' -> "Debug"; 'I' -> "Info"
-        'W' -> "Warn"; 'E' -> "Error"; 'F' -> "Fatal/Assert"
-        else -> ch.toString()
+    private fun styleInput(f: JTextField) {
+        f.font       = Font(Font.MONOSPACED, Font.PLAIN, 11)
+        f.background = JBColor(Color(0x0d1117), Color(0x0d1117))
+        f.foreground = JBColor.WHITE
+        f.caretColor = JBColor.WHITE
+        f.border     = JBUI.Borders.customLine(JBColor(Color(0x30363d), Color(0x30363d)))
+    }
+
+    private fun quickFilter(action: () -> Unit) = object : DocumentListener {
+        override fun insertUpdate(e: javax.swing.event.DocumentEvent?) = action()
+        override fun removeUpdate(e: javax.swing.event.DocumentEvent?) = action()
+        override fun changedUpdate(e: javax.swing.event.DocumentEvent?) {}
     }
 
     private fun MutableSet<Char>.set(key: Char, value: Boolean) {
         if (value) add(key) else remove(key)
+    }
+
+    // ── Cell renderer ─────────────────────────────────────────────────────────
+
+    inner class LogCellRenderer : ListCellRenderer<ParsedLogLine> {
+        // Reuse one panel per renderer (Swing pattern)
+        private val panel       = JPanel(null)   // null layout — manual setBounds
+        private val tsLabel     = JLabel()
+        private val pidLabel    = JLabel()
+        private val tagLabel    = JLabel()
+        private val levelLabel  = JLabel()
+        private val msgLabel    = JLabel()
+        private val stripe      = JPanel()
+
+        // Widths (in unscaled px, scaled at paint time)
+        private val TS_W    = JBUI.scale(155)
+        private val PID_W   = JBUI.scale(90)
+        private val TAG_W   = JBUI.scale(160)
+        private val LV_W    = JBUI.scale(18)
+        private val STRIPE  = JBUI.scale(3)
+        private val PAD     = JBUI.scale(4)
+        private val H       = JBUI.scale(18)
+
+        private val monoFont = Font(Font.MONOSPACED, Font.PLAIN, JBUI.scaleFontSize(11f).toInt())
+
+        init {
+            panel.isOpaque = true
+            stripe.isOpaque = true
+
+            for (lbl in listOf(tsLabel, pidLabel, tagLabel, levelLabel, msgLabel)) {
+                lbl.font       = monoFont
+                lbl.isOpaque   = false
+                panel.add(lbl)
+            }
+            panel.add(stripe)
+        }
+
+        override fun getListCellRendererComponent(
+            list: JList<out ParsedLogLine>, value: ParsedLogLine,
+            index: Int, isSelected: Boolean, cellHasFocus: Boolean
+        ): Component {
+            val col = levelColor(value.level)
+            panel.background = if (isSelected) BG_SEL else BG
+
+            stripe.background = col
+            stripe.setBounds(0, 0, STRIPE, H)
+
+            var x = STRIPE + PAD
+
+            tsLabel.text       = value.timestamp
+            tsLabel.foreground = C_META
+            tsLabel.setBounds(x, 0, TS_W, H)
+            x += TS_W + PAD
+
+            pidLabel.text       = value.pidTid
+            pidLabel.foreground = C_META
+            pidLabel.setBounds(x, 0, PID_W, H)
+            x += PID_W + PAD
+
+            val tag = value.tag.let { if (it.length > 23) it.take(22) + "…" else it.padEnd(23) }
+            tagLabel.text       = tag
+            tagLabel.foreground = C_META
+            tagLabel.setBounds(x, 0, TAG_W, H)
+            x += TAG_W + PAD
+
+            levelLabel.text       = value.level.toString()
+            levelLabel.foreground = col
+            levelLabel.setBounds(x, 0, LV_W, H)
+            x += LV_W + PAD
+
+            msgLabel.text       = value.message
+            msgLabel.foreground = if (isSelected) Color.WHITE else col
+            msgLabel.setBounds(x, 0, list.width - x - PAD, H)
+
+            panel.preferredSize = Dimension(list.width, H)
+            return panel
+        }
     }
 }
